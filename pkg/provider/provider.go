@@ -1,24 +1,37 @@
 package provider
 
 import (
-	"bytes"
 	"encoding/json"
 	"log"
-	"os/exec"
+	"os"
+	"strings"
 
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/terraform"
+	"gopkg.in/yaml.v1"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	groupSchema "k8s.io/apimachinery/pkg/runtime/schema"
+
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/tools/clientcmd"
 )
+
+func newClient() (dynamic.Interface, error) {
+	config, _ := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	return dynamic.NewForConfig(config)
+}
 
 func Provider() terraform.ResourceProvider {
 	return &schema.Provider{
 		ResourcesMap: map[string]*schema.Resource{
-			"multiverse_custom_resource": resource.CrdResource(),
+			"kubernetes_crd": crdResource(),
 		},
 	}
 }
 
-func CrdResource() *schema.Resource {
+func crdResource() *schema.Resource {
 	return &schema.Resource{
 		Create: onCreate,
 		Read:   onRead,
@@ -32,7 +45,23 @@ func CrdResource() *schema.Resource {
 		SchemaVersion: 1,
 
 		Schema: map[string]*schema.Schema{
-			"data": &schema.Schema{
+			"api_version": &schema.Schema{
+				Type:     schema.TypeString,
+				Required: true,
+			},
+			"name": &schema.Schema{
+				Type:     schema.TypeString,
+				Required: true,
+			},
+			"kind": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"namespace": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"spec": &schema.Schema{
 				Type:     schema.TypeString,
 				Required: true,
 			},
@@ -41,47 +70,95 @@ func CrdResource() *schema.Resource {
 }
 
 func onCreate(d *schema.ResourceData, m interface{}) error {
-	return do("create", d, m)
+	crdAPIVersion := d.Get("api_version").(string)
+	crdType := strings.Split(crdAPIVersion, "/")
+
+	crdKind := d.Get("kind").(string)
+	crdName := d.Get("name").(string)
+	crdNamespace := d.Get("namespace").(string)
+
+	log.Printf("Executing create for %s - %s - %s", crdAPIVersion, crdKind, crdName)
+	crdResource := groupSchema.GroupVersionResource{
+		Group:    crdType[0],
+		Version:  crdType[1],
+		Resource: strings.ToLower(crdKind) + "s",
+	}
+
+	var crdSpec map[string]interface{}
+
+	crdSpecString := d.Get("spec").(string)
+	err := yaml.Unmarshal([]byte(crdSpecString), &crdSpec)
+	if err != nil {
+		log.Printf("Spec string %s", crdSpecString)
+		log.Print(err)
+		panic("Failure decoding CRD spec")
+	}
+
+	obj := map[string]interface{}{
+		"apiVersion": crdAPIVersion,
+		"kind":       crdKind,
+		"metadata": map[string]string{
+			"name":      crdName,
+			"namespace": crdNamespace,
+		},
+		"spec": crdSpec,
+	}
+
+	unstructuredObj := unstructured.Unstructured{}
+	unstructuredObj.SetUnstructuredContent(obj)
+
+	log.Printf("Content is '%T'", unstructuredObj.Object["spec"].(map[string]interface{})["sidecarInjector"])
+
+	// serialized, _ := json.Marshal(unstructuredObj)
+	_, err = json.Marshal(unstructuredObj.Object)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	client, _ := newClient()
+
+	// log.Print(obj)
+	log.Printf("Calling k8s api for %s", crdName)
+	_, err = client.Resource(crdResource).Namespace(crdNamespace).Create(&unstructuredObj, metav1.CreateOptions{})
+	if err != nil {
+		panic(err)
+		return err
+	}
+
+	log.Printf("Created %s", crdName)
+
+	// return onRead(d, m)
+	return nil
 }
 
 func onRead(d *schema.ResourceData, m interface{}) error {
-	return do("read", d, m)
+	// return do("read", d, m)
+	crdAPIVersion := d.Get("api_version").(string)
+	crdType := strings.Split(crdAPIVersion, "/")
+
+	crdKind := d.Get("kind").(string)
+	crdName := d.Get("name").(string)
+	crdNamespace := d.Get("namespace").(string)
+	// crdSpec := d.Get("spec").(string)
+
+	crdResource := groupSchema.GroupVersionResource{
+		Group:    crdType[0],
+		Version:  crdType[1],
+		Resource: strings.ToLower(crdKind) + "s",
+	}
+
+	client, _ := newClient()
+
+	crdInstance, _ := client.Resource(crdResource).Namespace(crdNamespace).Get(crdName, metav1.GetOptions{})
+	m = crdInstance
+
+	return nil
 }
 
 func onUpdate(d *schema.ResourceData, m interface{}) error {
-	return do("update", d, m)
+	return nil
 }
 
 func onDelete(d *schema.ResourceData, m interface{}) error {
-	return do("delete", d, m)
-}
-
-func do(event string, d *schema.ResourceData, m interface{}) error {
-	log.Printf("Executing: %s %s %s %s", d.Get("executor"), d.Get("script"), event, d.Get("data"))
-
-	cmd := exec.Command(d.Get("executor").(string), d.Get("script").(string), event)
-
-	if event == "delete" {
-		cmd.Stdin = bytes.NewReader([]byte(d.Id()))
-	} else {
-		cmd.Stdin = bytes.NewReader([]byte(d.Get("data").(string)))
-	}
-
-	result, err := cmd.Output()
-
-	if err == nil {
-		var resource map[string]interface{}
-		err = json.Unmarshal([]byte(result), &resource)
-		if err == nil {
-			if event == "delete" {
-				d.SetId("")
-			} else {
-				key := d.Get("id_key").(string)
-				d.Set("resource", resource)
-				d.SetId(resource[key].(string))
-			}
-		}
-	}
-
-	return err
+	return nil
 }

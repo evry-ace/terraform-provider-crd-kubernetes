@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/evry-bergen/terraform-provider-k8s-crd/pkg/provider"
+	"github.com/evry-ace/terraform-provider-k8s-crd/pkg/provider"
 	"github.com/hashicorp/terraform/plugin"
 	"github.com/hashicorp/terraform/terraform"
 )

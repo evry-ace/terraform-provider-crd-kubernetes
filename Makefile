@@ -10,7 +10,7 @@ all: build
 
 .PHONY: build
 build:
-	$Q CGO_ENABLED=0 GOOS=linux go build -a --installsuffix dist -o main $(if $V,-v) $(VERSION_FLAGS) $(IMPORT_PATH)/cmd
+	$Q CGO_ENABLED=0 GOOS=linux go build -a --installsuffix dist -o terraform-provider-kubernetes_crd $(if $V,-v) $(VERSION_FLAGS) $(IMPORT_PATH)/cmd
 
 ### Code not in the repository root? Another binary? Add to the path like this.
 # .PHONY: otherbin

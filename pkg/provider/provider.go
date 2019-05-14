@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 	"strings"
@@ -94,6 +95,11 @@ func onCreate(d *schema.ResourceData, m interface{}) error {
 		panic("Failure decoding CRD spec")
 	}
 
+	sanitized, err := stringMapize(crdSpec)
+	if err != nil {
+		return err
+	}
+
 	obj := map[string]interface{}{
 		"apiVersion": crdAPIVersion,
 		"kind":       crdKind,
@@ -101,10 +107,11 @@ func onCreate(d *schema.ResourceData, m interface{}) error {
 			"name":      crdName,
 			"namespace": crdNamespace,
 		},
-		"spec": crdSpec,
+		"spec": sanitized,
 	}
 
 	unstructuredObj := unstructured.Unstructured{}
+
 	unstructuredObj.SetUnstructuredContent(obj)
 
 	log.Printf("Content is '%T'", unstructuredObj.Object["spec"].(map[string]interface{})["sidecarInjector"])
@@ -129,6 +136,35 @@ func onCreate(d *schema.ResourceData, m interface{}) error {
 
 	// return onRead(d, m)
 	return nil
+}
+
+func stringMapize(i interface{}) (interface{}, error) {
+	var err error
+	switch t := i.(type) {
+	case (map[interface{}]interface{}):
+		m := make(map[string]interface{}, len(t))
+		log.Printf("Data -> %s", t)
+
+		for k, v := range t {
+			str, ok := k.(string)
+			if !ok {
+				return nil, errors.New("map had non-string keys")
+			}
+			m[str], err = stringMapize(v)
+			if err != nil {
+				return nil, err
+			}
+		}
+	case (map[string]interface{}):
+		for k, v := range t {
+			t[k], err = stringMapize(v)
+			if err != nil {
+				return nil, err
+			}
+		}
+		// todo: more cases
+	}
+	return i, nil
 }
 
 func onRead(d *schema.ResourceData, m interface{}) error {

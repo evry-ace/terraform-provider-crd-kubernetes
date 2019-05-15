@@ -66,7 +66,6 @@ Q := $(if $V,,@)
 
 .PHONY: setup
 setup: .ok
-	echo "github.com/knative/pkg" >> knative-pkg/go.mod
 	go mod download
 
 VERSION          := $(shell git describe --tags --always --dirty="-dev")

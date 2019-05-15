@@ -268,6 +268,8 @@ func onUpdate(d *schema.ResourceData, m interface{}) error {
 		"spec": sanitized,
 	}
 
+	log.Printf("Updating CRD to: '%s'", obj)
+
 	unstructuredObj := unstructured.Unstructured{}
 	unstructuredObj.SetUnstructuredContent(obj)
 
@@ -275,6 +277,7 @@ func onUpdate(d *schema.ResourceData, m interface{}) error {
 
 	_, err = client.Resource(crdResource).Namespace(crdNamespace).Update(&unstructuredObj, metav1.UpdateOptions{})
 	if err != nil {
+		log.Printf("Error updating CRD: %s", err)
 		return err
 	}
 

@@ -7,8 +7,7 @@ def isMaster = "${env.BRANCH_NAME}" == 'master'
 def isPR = "${env.CHANGE_URL}".contains('/pull/')
 
 opts = [
-  buildAgent: 'master',
-  workspace: '/opt/bitnami/apps/jenkins'
+  buildAgent: 'jenkins-docker-3',
 ]
 
 ace(opts) {

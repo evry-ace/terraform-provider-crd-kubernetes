@@ -1,0 +1,7 @@
+name: terraform-provider-k8s-crd
+
+# Contact Information
+contact:
+  responsible: DevOps
+  slack_notifications: "#devops-notifications"
+  slack_alerts: "#devops-alerts"

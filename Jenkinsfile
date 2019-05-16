@@ -16,7 +16,7 @@ ace(opts) {
   def args = [
     "-v ${pwd()}:/src",
     "-w /src",
-    "-e GOCACHE=.GOCACHE",
+    "-e GOCACHE=/tmp/.GOCACHE",
     "-e GOPATH=/src/.GO",
     "-e CI=1"
   ]
@@ -24,7 +24,6 @@ ace(opts) {
   stage('Setup') {
     docker.image("golang:${goVer}").inside(args.join(' ')) {
       sh """
-        export GOCACHE=.GOCACHE
         make setup
       """
     }
@@ -42,7 +41,6 @@ ace(opts) {
   stage('Build') {
     docker.image("golang:${goVer}").inside(args.join(' ')) {
       sh """
-        export GOCACHE=.GOCACHE
         make
       """
     }

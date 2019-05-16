@@ -54,16 +54,4 @@ ace(opts) {
 
     //dockerBuild()
   }
-
-  stage('Push') {
-    dockerPush()
-  }
-
-  stage('Deploy') {
-    if (isMaster) {
-      deploy("test")
-    }
-
-    // slack.notifyDeploy('test')
-  }
 }

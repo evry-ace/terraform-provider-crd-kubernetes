@@ -52,7 +52,7 @@ ace(opts) {
     //   [$class: 'ArbitraryFileCache', includes: '**/*', path: '.GOPATH/go/src/google.golang.org']
     // ])
 
-    dockerBuild()
+    //dockerBuild()
   }
 
   stage('Push') {
